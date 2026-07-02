@@ -1,22 +1,21 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta name="description" content="Jump ring aspect ratio calculator for chainmail jewelry makers. Supports inches, mm, cm, AWG, SWG, and fractional inputs.">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Jump ring aspect ratio calculator for chainmail jewelry makers. Supports inches, mm, cm, gauge numbers, and fractional inputs.">
 <meta name="keywords" content="jump ring calculator, aspect ratio calculator, chainmail calculator, jewelry making tools, AWG SWG ring sizes">
 <meta name="author" content="I">
 <title>Jump Ring Aspect Ratio Calculator</title>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Jump Ring Aspect Ratio Calculator</title>
 
 <style>
-/* Overall container */
 body {
   max-width: 480px;
   margin: auto;
   padding: 16px;
   font-family: Arial, sans-serif;
   background: #fafafa;
+  color: #1d2630;
 }
 
 h2, h3, h4 {
@@ -24,7 +23,13 @@ h2, h3, h4 {
   text-align: center;
 }
 
-/* Labels and inputs */
+.intro {
+  margin: 0 auto 20px;
+  color: #4c5a69;
+  line-height: 1.45;
+  text-align: center;
+}
+
 label {
   display: block;
   margin: 12px 0 6px;
@@ -40,7 +45,6 @@ input, select {
   box-sizing: border-box;
 }
 
-/* Button */
 button {
   width: 100%;
   padding: 14px;
@@ -57,16 +61,39 @@ button:hover {
   background: #005fcc;
 }
 
-/* Results */
 #result, #recommendations {
   margin-top: 20px;
   padding: 12px;
   background: #f7f7f7;
   border-radius: 6px;
-  font-size: 1.1rem;
+  font-size: 1.05rem;
 }
 
-/* Mobile responsiveness */
+.result-card,
+.recommendation-card {
+  margin-top: 12px;
+  padding: 12px;
+  background: white;
+  border: 1px solid #d5dde6;
+  border-radius: 6px;
+}
+
+.result-card h4,
+.recommendation-card h4 {
+  margin: 0 0 8px;
+  text-align: left;
+}
+
+.result-line,
+.recommendation-item,
+.result-note {
+  margin: 6px 0;
+}
+
+.result-note {
+  color: #4c5a69;
+}
+
 @media (max-width: 480px) {
   input, select, button {
     font-size: 1.15rem;
@@ -83,6 +110,7 @@ button:hover {
 <body>
 
 <h2>Jump Ring Aspect Ratio Calculator</h2>
+<p class="intro">Aspect Ratio = inner diameter / wire diameter. Enter a gauge number to compare that same size in both AWG and SWG, or enter a direct wire diameter and see the AR labeled both ways.</p>
 
 <h3>Inner Diameter</h3>
 <label>Unit:
@@ -121,8 +149,7 @@ button:hover {
 <h3>Wire Size</h3>
 <label>Wire Input Type:
   <select id="wireType" onchange="toggleWireInputs()">
-    <option value="awg">AWG</option>
-    <option value="swg">SWG</option>
+    <option value="gauge">Gauge Number</option>
     <option value="in">Inches</option>
     <option value="mm">Millimeters</option>
     <option value="cm">Centimeters</option>
@@ -130,8 +157,8 @@ button:hover {
 </label>
 
 <div id="wireGaugeInputs">
-  <label>Gauge:
-    <input id="wireGauge" type="number" min="0" max="30">
+  <label>Gauge number:
+    <input id="wireGauge" type="number" min="0" max="30" step="1">
   </label>
 </div>
 
@@ -159,8 +186,8 @@ button:hover {
 <button onclick="calculateAR()">Calculate AR</button>
 
 <h3>Results</h3>
-<div id="result"></div>
-<div id="recommendations"></div>
+<div id="result" aria-live="polite"></div>
+<div id="recommendations" aria-live="polite"></div>
 
 <script>
 const AWG = {
@@ -187,18 +214,62 @@ const RECOMMENDED_AR = {
   "Full Persian": [5.0, 6.0]
 };
 
+const WIRE_SYSTEMS = [
+  { key: "awg", label: "AWG", table: AWG },
+  { key: "swg", label: "SWG", table: SWG }
+];
+
 function parseFraction(str) {
   if (!str) return null;
-  try {
-    if (str.includes(" ")) {
-      const [whole, frac] = str.split(" ");
-      return parseFloat(whole) + eval(frac);
-    }
-    if (str.includes("/")) return eval(str);
-    return parseFloat(str);
-  } catch {
-    return null;
+
+  const value = str.trim();
+  if (!value) return null;
+
+  const mixedMatch = value.match(/^(\d+)\s+(\d+)\s*\/\s*(\d+)$/);
+  if (mixedMatch) {
+    const whole = Number(mixedMatch[1]);
+    const numerator = Number(mixedMatch[2]);
+    const denominator = Number(mixedMatch[3]);
+    if (denominator === 0) return null;
+    return whole + (numerator / denominator);
   }
+
+  const fractionMatch = value.match(/^(\d+)\s*\/\s*(\d+)$/);
+  if (fractionMatch) {
+    const numerator = Number(fractionMatch[1]);
+    const denominator = Number(fractionMatch[2]);
+    if (denominator === 0) return null;
+    return numerator / denominator;
+  }
+
+  if (/^(?:\d+\.?\d*|\.\d+)$/.test(value)) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  return null;
+}
+
+function toInches(value, unit) {
+  if (!Number.isFinite(value) || value <= 0) return null;
+  if (unit === "mm") return value / 25.4;
+  if (unit === "cm") return value / 2.54;
+  return value;
+}
+
+function formatInches(value) {
+  return `${value.toFixed(4)} in`;
+}
+
+function getFractionOrCustomValue(selectId, inputId) {
+  const custom = document.getElementById(inputId).value.trim();
+  if (custom) return parseFraction(custom);
+  return parseFraction(document.getElementById(selectId).value);
+}
+
+function renderError(message) {
+  document.getElementById("result").textContent = message;
+  document.getElementById("recommendations").innerHTML = "";
 }
 
 function toggleIDInputs() {
@@ -209,72 +280,119 @@ function toggleIDInputs() {
 
 function toggleWireInputs() {
   const type = document.getElementById("wireType").value;
-  document.getElementById("wireGaugeInputs").style.display = (type === "awg" || type === "swg") ? "block" : "none";
+  document.getElementById("wireGaugeInputs").style.display = type === "gauge" ? "block" : "none";
   document.getElementById("wireInchInputs").style.display = type === "in" ? "block" : "none";
   document.getElementById("wireMetricInput").style.display = (type === "mm" || type === "cm") ? "block" : "none";
 }
 
-function calculateAR() {
-  const resultDiv = document.getElementById("result");
-  const recDiv = document.getElementById("recommendations");
-  resultDiv.innerHTML = "";
-  recDiv.innerHTML = "";
+function buildRecommendations(label, ar) {
+  let html = `<div class="recommendation-card"><h4>${label} Weave Suitability</h4>`;
 
-  // Inner diameter
-  const idUnit = document.getElementById("idUnit").value;
-  let idInches;
-
-  if (idUnit === "in") {
-    const frac = document.getElementById("idFraction").value;
-    const custom = document.getElementById("idCustom").value;
-    idInches = parseFraction(custom || frac);
-  } else {
-    const val = parseFloat(document.getElementById("idMetric").value);
-    if (isNaN(val) || val <= 0) return resultDiv.innerHTML = "Invalid inner diameter.";
-    idInches = idUnit === "mm" ? val / 25.4 : val / 2.54;
-  }
-
-  if (!idInches || idInches <= 0) return resultDiv.innerHTML = "Invalid inner diameter.";
-
-  // Wire diameter
-  const wireType = document.getElementById("wireType").value;
-  let wireInches;
-
-  if (wireType === "awg" || wireType === "swg") {
-    const gauge = parseInt(document.getElementById("wireGauge").value);
-    const table = wireType === "awg" ? AWG : SWG;
-    wireInches = table[gauge];
-    if (!wireInches) return resultDiv.innerHTML = "Invalid gauge.";
-  } else if (wireType === "in") {
-    const frac = document.getElementById("wireFraction").value;
-    const custom = document.getElementById("wireCustom").value;
-    wireInches = parseFraction(custom || frac);
-  } else {
-    const val = parseFloat(document.getElementById("wireMetric").value);
-    if (isNaN(val) || val <= 0) return resultDiv.innerHTML = "Invalid wire size.";
-    wireInches = wireType === "mm" ? val / 25.4 : val / 2.54;
-  }
-
-  if (!wireInches || wireInches <= 0) return resultDiv.innerHTML = "Invalid wire size.";
-
-  // Calculate AR
-  const ar = idInches / wireInches;
-  resultDiv.innerHTML = `Aspect Ratio: <strong>${ar.toFixed(2)}</strong>`;
-
-  // Recommendations
-  let html = "<h4>Weave Suitability</h4>";
   for (const weave in RECOMMENDED_AR) {
     const [low, high] = RECOMMENDED_AR[weave];
     if (ar >= low && ar <= high) {
-      html += `✔ ${weave} (ideal ${low}–${high})<br>`;
+      html += `<div class="recommendation-item">${weave}: suitable (ideal ${low.toFixed(1)} to ${high.toFixed(1)})</div>`;
     } else if (ar < low) {
-      html += `• ${weave}: too tight (needs ≥ ${low})<br>`;
+      html += `<div class="recommendation-item">${weave}: too tight (needs at least ${low.toFixed(1)})</div>`;
     } else {
-      html += `• ${weave}: too loose (needs ≤ ${high})<br>`;
+      html += `<div class="recommendation-item">${weave}: too loose (needs at most ${high.toFixed(1)})</div>`;
     }
   }
-  recDiv.innerHTML = html;
+
+  html += "</div>";
+  return html;
 }
+
+function buildResultCard(label, ar, wireDiameterInches) {
+  return `
+    <div class="result-card">
+      <h4>${label} Aspect Ratio</h4>
+      <div class="result-line">AR = inner diameter / wire diameter</div>
+      <div class="result-line"><strong>${ar.toFixed(2)}</strong></div>
+      <div class="result-line">Wire diameter used: ${formatInches(wireDiameterInches)}</div>
+    </div>
+  `;
+}
+
+function calculateAR() {
+  const idUnit = document.getElementById("idUnit").value;
+  let innerDiameterInches;
+
+  if (idUnit === "in") {
+    innerDiameterInches = getFractionOrCustomValue("idFraction", "idCustom");
+  } else {
+    const value = parseFloat(document.getElementById("idMetric").value);
+    innerDiameterInches = toInches(value, idUnit);
+  }
+
+  if (!Number.isFinite(innerDiameterInches) || innerDiameterInches <= 0) {
+    renderError("Invalid inner diameter.");
+    return;
+  }
+
+  const wireType = document.getElementById("wireType").value;
+  let wireDiameters;
+  let note;
+
+  if (wireType === "gauge") {
+    const gaugeValue = Number(document.getElementById("wireGauge").value);
+    if (!Number.isInteger(gaugeValue) || !(gaugeValue in AWG) || !(gaugeValue in SWG)) {
+      renderError("Invalid gauge number.");
+      return;
+    }
+
+    wireDiameters = {
+      awg: AWG[gaugeValue],
+      swg: SWG[gaugeValue]
+    };
+    note = `Gauge ${gaugeValue} is compared using both AWG and SWG tables.`;
+  } else if (wireType === "in") {
+    const wireInches = getFractionOrCustomValue("wireFraction", "wireCustom");
+    if (!Number.isFinite(wireInches) || wireInches <= 0) {
+      renderError("Invalid wire size.");
+      return;
+    }
+
+    wireDiameters = {
+      awg: wireInches,
+      swg: wireInches
+    };
+    note = "Because you entered a direct wire diameter, the AWG and SWG aspect ratios are identical.";
+  } else {
+    const value = parseFloat(document.getElementById("wireMetric").value);
+    const wireInches = toInches(value, wireType);
+    if (!Number.isFinite(wireInches) || wireInches <= 0) {
+      renderError("Invalid wire size.");
+      return;
+    }
+
+    wireDiameters = {
+      awg: wireInches,
+      swg: wireInches
+    };
+    note = "Because you entered a direct wire diameter, the AWG and SWG aspect ratios are identical.";
+  }
+
+  const results = WIRE_SYSTEMS.map(({ key, label }) => {
+    const wireDiameterInches = wireDiameters[key];
+    const aspectRatio = innerDiameterInches / wireDiameterInches;
+    return { label, wireDiameterInches, aspectRatio };
+  });
+
+  const resultDiv = document.getElementById("result");
+  const recommendationsDiv = document.getElementById("recommendations");
+
+  resultDiv.innerHTML = results.map((result) => (
+    buildResultCard(result.label, result.aspectRatio, result.wireDiameterInches)
+  )).join("") + `<div class="result-note">${note}</div>`;
+
+  recommendationsDiv.innerHTML = results.map((result) => (
+    buildRecommendations(result.label, result.aspectRatio)
+  )).join("");
+}
+
+toggleIDInputs();
+toggleWireInputs();
 </script>
 
 </body>
